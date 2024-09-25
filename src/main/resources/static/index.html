@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Virtual Pet Eden</title>
+    <style>
+        /* CSS Styles */
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: url('/images/eden-background.webp') no-repeat center center fixed;
+            background-size: cover;
+            font-family: Arial, sans-serif;
+        }
+
+        .pet {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+
+        /* Pop-up Styles */
+        #interaction-popup, #create-popup {
+            display: none;
+            position: absolute;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 15px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+        }
+
+        #interaction-popup button, #create-popup button {
+            display: block;
+            margin: 5px 0;
+            background: #fff;
+            border: none;
+            padding: 10px 15px;
+            cursor: pointer;
+        }
+
+        #interaction-popup button:hover, #create-popup button:hover {
+            background: #f0f0f0;
+        }
+
+        #interaction-popup p, #create-popup p {
+            margin: 0 0 10px 0;
+        }
+
+        /* Create Button Style */
+        #create-button {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: #4CAF50;
+            color: #fff;
+            border: none;
+            padding: 10px 15px;
+            cursor: pointer;
+            border-radius: 5px;
+            z-index: 1000;
+        }
+
+        #create-button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Create Creature Button -->
+<button id="create-button">Create New Creature</button>
+
+
+<!-- Create Creature Pop-up -->
+<div id="create-popup">
+    <p>Create a New Creature</p>
+    <input type="text" id="new-pet-name" placeholder="Name" required>
+    <button onclick="createCreature()">Create</button>
+</div>
+
+
+<!-- Interaction Pop-up -->
+<div id="interaction-popup">
+    <p id="pet-status"></p>
+    <button onclick="interact('feed')">Feed</button>
+    <button onclick="interact('gift')">Give Gift</button>
+    <button id="delete-button">Delete</button>
+</div>
+
+
+<script>
+    // JavaScript Logic
+
+    let pets = [];
+
+    // Function to fetch and render pets on the page
+    function loadAndRenderPets() {
+        fetch('/creatures')
+            .then(response => response.json())
+            .then(data => {
+                pets = data;
+                renderPets();
+            })
+            .catch(error => {
+                console.error('Error fetching creatures:', error);
+            });
+    }
+
+    function renderPets() {
+        // Remove existing pets
+        document.querySelectorAll('.pet').forEach(petElement => petElement.remove());
+
+        pets.forEach(pet => {
+            const img = document.createElement('img');
+            img.src = pet.imageUrl;
+            img.className = 'pet';
+            img.id = pet.id;
+
+            // Random positioning within the viewport
+            img.style.left = Math.random() * (window.innerWidth - 100) + 'px';
+            img.style.top = Math.random() * (window.innerHeight - 100) + 'px';
+
+            // Randomized animation
+            const animationDuration = 2 + Math.random() * 3; // Between 2 and 5 seconds
+            const bounceHeight = 10 + Math.random() * 20; // Between 10 and 30 pixels
+
+            img.style.animation = `float-${pet.id} ${animationDuration}s ease-in-out infinite`;
+
+            // Define keyframes for each pet
+            const styleSheet = document.styleSheets[0];
+            const keyframes =
+                `@keyframes float-${pet.id} {
+                    0%, 100% { transform: translateY(0); }
+                    50% { transform: translateY(-${bounceHeight}px); }
+                }`;
+            styleSheet.insertRule(keyframes, styleSheet.cssRules.length);
+
+            // Click event to show interaction popup
+            img.addEventListener('click', (event) => showInteractionPopup(event, pet.id));
+
+            document.body.appendChild(img);
+        });
+    }
+
+    // Function to show interaction popup
+    function showInteractionPopup(event, petId) {
+        event.stopPropagation();
+        const popup = document.getElementById('interaction-popup');
+        popup.style.display = 'block';
+        popup.style.left = event.pageX + 'px';
+        popup.style.top = event.pageY + 'px';
+        popup.setAttribute('data-pet-id', petId);
+
+        // Fetch pet mood and energy from backend
+        fetch(`/creatures/${petId}`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('pet-status').textContent =
+                    `Name: ${data.name}, Mood: ${data.mood}, Energy: ${data.energy}`;
+            })
+            .catch(error => {
+                console.error('Error fetching pet status:', error);
+            });
+
+        // Add Delete Button
+        document.getElementById('delete-button').onclick = () => deleteCreature(petId);
+    }
+
+
+    // Function to interact with the pet
+    function interact(action) {
+        const popup = document.getElementById('interaction-popup');
+        const petId = popup.getAttribute('data-pet-id');
+
+        fetch(`/creatures/${petId}/interact`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({action: action})
+        })
+            .then(response => response.json())
+            .then(data => {
+                // Update pet status in the popup
+                document.getElementById('pet-status').textContent =
+                    `Name: ${data.name}, Mood: ${data.mood}, Energy: ${data.energy}`;
+            })
+            .catch(error => {
+                console.error('Error interacting with pet:', error);
+            });
+    }
+
+
+    // Function to show create creature popup
+    document.getElementById('create-button').addEventListener('click', (event) => {
+        event.stopPropagation();
+        const popup = document.getElementById('create-popup');
+        popup.style.display = 'block';
+        popup.style.left = '50px';
+        popup.style.top = '50px';
+    });
+
+    function createCreature() {
+        const name = document.getElementById('new-pet-name').value;
+
+        fetch('/creatures', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ name: name })
+        })
+            .then(response => response.json())
+            .then(data => {
+                pets.push(data);
+                renderPets();
+                document.getElementById('create-popup').style.display = 'none';
+                alert(`Creature "${data.name}" has been created!`);
+            })
+            .catch(error => {
+                console.error('Error creating creature:', error);
+            });
+    }
+
+    function deleteCreature(petId) {
+        fetch(`/creatures/${petId}`, {
+            method: 'DELETE'
+        })
+            .then(() => {
+                pets = pets.filter(pet => pet.id !== petId);
+                renderPets();
+                document.getElementById('interaction-popup').style.display = 'none';
+                alert('Creature has been deleted.');
+            })
+            .catch(error => {
+                console.error('Error deleting creature:', error);
+            });
+    }
+
+
+    // Hide the popups when clicking outside
+    document.addEventListener('click', () => {
+        document.getElementById('interaction-popup').style.display = 'none';
+        document.getElementById('create-popup').style.display = 'none';
+    });
+
+    // Initialize pets on page load
+    window.onload = loadAndRenderPets;
+
+</script>
+</body>
+</html>
